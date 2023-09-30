@@ -409,6 +409,8 @@ void macho_handle_segment(
   yr_section_32_t* sections =
       (yr_section_32_t*) (data + sizeof(yr_segment_command_32_t));
 
+  int mod_init_count = 0;
+
   for (unsigned j = 0; j < sg.nsects; ++j)
   {
     yr_section_32_t sec;
@@ -439,6 +441,12 @@ void macho_handle_segment(
         i,
         j);
 
+    if (strcmp(sec.segname, "__DATA") == 0) {
+      if (strcmp(sec.sectname, "__mod_init_func") == 0) {
+        mod_init_count += 1;
+      }
+    }
+
     yr_set_integer(sec.addr, object, "segments[%i].sections[%i].addr", i, j);
 
     yr_set_integer(sec.size, object, "segments[%i].sections[%i].size", i, j);
@@ -458,18 +466,12 @@ void macho_handle_segment(
 
     yr_set_integer(
         sec.reserved2, object, "segments[%i].sections[%i].reserved2", i, j);
+  }  
+  
+  if (strcmp(sg.segname, "__DATA") == 0) {
+    yr_set_integer(mod_init_count, object, "number_of_mod_init_funcs");
   }
-}
 
-// Strings from the `lc_str` unions will often have padding, remove it with this
-uint32_t handle_name_padding(char* str, uint32_t len, char c) {
-    int j = 0;
-    for (int i = 0; i < len; i++)
-        if (str[i] != c)
-            str[j++] = str[i];
-    str[j] = '\0';
-
-    return j;
 }
 
 void macho_handle_segment_64(
@@ -505,6 +507,8 @@ void macho_handle_segment_64(
   uint64_t parsed_size = sizeof(yr_segment_command_64_t);
 
   yr_section_64_t sec;
+  
+  int mod_init_count = 0;
 
   for (unsigned j = 0; j < sg.nsects; ++j)
   {
@@ -521,6 +525,12 @@ void macho_handle_segment_64(
     if (should_swap)
       swap_section_64(&sec);
 
+    if (strcmp(sec.segname, "__DATA") == 0) {
+      if (strcmp(sec.sectname, "__mod_init_func") == 0) {
+        mod_init_count += 1;
+      }
+    }
+    
     yr_set_sized_string(
         sec.segname,
         strnlen(sec.segname, 16),
@@ -560,6 +570,22 @@ void macho_handle_segment_64(
     yr_set_integer(
         sec.reserved3, object, "segments[%i].sections[%i].reserved3", i, j);
   }
+
+  if (strcmp(sg.segname, "__DATA") == 0) {
+    yr_set_integer(mod_init_count, object, "number_of_mod_init_funcs");
+  }
+
+}
+
+// Strings from the `lc_str` unions will often have padding, remove it with this
+uint32_t handle_name_padding(char* str, uint32_t len, char c) {
+    int j = 0;
+    for (int i = 0; i < len; i++)
+        if (str[i] != c)
+            str[j++] = str[i];
+    str[j] = '\0';
+
+    return j;
 }
 
 void macho_handle_dylib(
@@ -1316,7 +1342,7 @@ begin_declarations
 
   // Segments and nested sections
   declare_integer("number_of_segments");
-
+  declare_integer("number_of_mod_init_funcs");
   begin_struct_array("segments")
     declare_string("segname");
     declare_integer("vmaddr");
